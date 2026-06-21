@@ -3,7 +3,11 @@ google-auth-httplib2==0.2.0
 google-auth-oauthlib==1.2.0
 python-dotenv==1.0.0
 pytz==2024.1
-streamlit>=1.37.0
+# Streamlitはデスクトップと同じ版に固定。未固定だとクラウドが最新版(1.58等)を入れ、
+# DOM/testidが変わってアイコン・スマホCSS・サイドバー等が全て効かなくなる。
+# ※この版は pillow<11 を要求するため、Streamlit CloudのPythonは 3.13 以下にすること
+#   （3.14だと古いpillowのホイールが無くビルド失敗する）。
+streamlit==1.37.1
 plotly>=5.24.0
 pandas>=2.0.0
 anthropic>=0.40.0
@@ -11,8 +15,8 @@ scikit-learn>=1.3.0
 numpy>=1.24.0
 # PyTorch（深層学習で拡張する場合・任意）: pip install torch
 
-streamlit-sortables>=0.2.0
-streamlit-calendar>=0.6.0
+streamlit-sortables==0.3.1
+streamlit-calendar==1.4.0
 
 # クラウド常時公開（Turso/libSQL = クラウド版SQLite）。純Pythonでビルド不要。
 libsql-client>=0.3.1
