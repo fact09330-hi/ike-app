@@ -1,0 +1,38 @@
+# ── 機密情報（絶対にコミットしない）──
+.env
+.env.*
+credentials.json
+token.json
+.streamlit/secrets.toml
+*.pem
+*.key
+
+# ── ローカルDB・キャッシュ ──
+ike_app.db
+ike_app.db-*
+events_cache.json
+*.sqlite
+*.sqlite3
+
+# ── Python ──
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+.mypy_cache/
+.pytest_cache/
+
+# ── OS / エディタ ──
+.DS_Store
+.idea/
+.vscode/
+.claude/
+
+# ── 配布物・ログ ──
+logs_streamlit.txt
+nohup.out
+build/
+dist/
+*.app
