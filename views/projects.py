@@ -41,6 +41,21 @@ def render(events, scorer):
         st.info("プロジェクトがありません。上の「新規プロジェクト作成」から追加してください。")
         return
 
+    # ステータス別の件数（達成＝完了 を明示表示）
+    _done = sum(1 for p in projects if p["status"] == "completed")
+    _active = sum(1 for p in projects if p["status"] == "active")
+    _onhold = sum(1 for p in projects if p["status"] == "onhold")
+    _todo = sum(1 for p in projects if p["status"] == "not_started")
+    st.markdown(
+        f"<div style='display:flex;gap:14px;flex-wrap:wrap;font-size:13px;font-weight:700;"
+        f"color:#3A3A36;margin:-4px 0 10px'>"
+        f"<span>📁 全 {len(projects)} 件</span>"
+        f"<span style='color:#16A34A'>🟢 進行中 {_active}</span>"
+        f"<span style='color:#713F12'>🟡 未着手 {_todo}</span>"
+        f"<span style='color:#7C3AED'>🟣 保留 {_onhold}</span>"
+        f"<span style='color:#2563EB'>🔵 達成 {_done}</span>"
+        f"</div>", unsafe_allow_html=True)
+
     # ドラッグ&ドロップ並び替え
     with st.expander("↕ ドラッグで並び替え"):
         _drag_reorder(projects)
@@ -63,10 +78,14 @@ def _drag_reorder(projects):
     except Exception:
         st.caption("ドラッグ並び替えのコンポーネントが見つかりません。▲▼ボタンをお使いください。")
         return
-    # 表示ラベル → id の対応（同名対策でid付き）
-    labels = [f"{p['name']}　#{p['id']}" for p in projects]
-    id_by_label = {f"{p['name']}　#{p['id']}": p["id"] for p in projects}
-    st.caption("項目をドラッグして離すと並びが保存されます。")
+    # 表示ラベル → id の対応（同名対策でid付き）。先頭に現在のステータス色ドットを付ける。
+    status_dot = {"not_started": "🟡", "active": "🟢", "onhold": "🟣", "completed": "🔵"}
+    labels, id_by_label = [], {}
+    for p in projects:
+        lbl = f"{status_dot.get(p['status'], '⚪')} {p['name']}　#{p['id']}"
+        labels.append(lbl)
+        id_by_label[lbl] = p["id"]
+    st.caption("項目をドラッグして離すと並びが保存されます。　🟡未着手 🟢進行中 🟣保留 🔵完了")
     new_order = sort_items(labels, direction="vertical", key="proj_sort")
     new_ids = [id_by_label[l] for l in new_order if l in id_by_label]
     cur_ids = [p["id"] for p in projects]
@@ -135,14 +154,14 @@ def _gantt():
             textfont=dict(size=10, color=CHART["font"]),
             showlegend=False, hoverinfo="skip"))
         # プロジェクト名をバーの始点に重ねて表示（縦軸ラベルの代わり・見切れ防止）
-        fig.add_annotation(x=b["s"], y=b["name"], text=" " + b["name"] + " ",
-                           showarrow=False, xanchor="left", yanchor="middle", yshift=13,
-                           font=dict(size=10.5, color="#141414"),
+        fig.add_annotation(x=b["s"], y=b["name"], text="<b> " + b["name"] + " </b>",
+                           showarrow=False, xanchor="left", yanchor="middle", yshift=15,
+                           font=dict(size=14, color="#141414"),
                            bgcolor="rgba(252,251,249,0.0)", borderpad=0)
 
     lo, hi = _gantt_range()
     fig.update_layout(
-        barmode="overlay", height=max(210, len(bars) * 48 + 56),
+        barmode="overlay", height=max(220, len(bars) * 54 + 60),
         margin=dict(t=8, b=4, l=8, r=14),
         paper_bgcolor=CHART["paper"], plot_bgcolor=CHART["paper"],
         font=dict(color=CHART["font"], size=11), showlegend=False,
