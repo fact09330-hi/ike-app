@@ -127,7 +127,7 @@ elif page == "pomodoro":
 elif page == "email":
     email_view.render()
 elif page == "settings":
-    settings.render(scorer)
+    settings.render(scorer, events)
 
 # ─── メイン画面をクリック/マウス移動したらメニューを自動で閉じる ───
 import streamlit.components.v1 as _components

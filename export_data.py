@@ -28,6 +28,10 @@ def _flatten_completion_log():
             payload = json.loads(lg["payload"])
         except Exception:
             payload = {}
+        h = payload.get("hours_to_complete")
+        # 即時/retroactive完了（作成から短時間で完了）は実作業でないため学習から除外
+        if h is not None and h < getattr(db, "MIN_TRACK_HOURS", 0.5):
+            continue
         t = todos.get(lg["ref_id"], {})
         rows.append({
             "todo_id": lg["ref_id"],

@@ -93,6 +93,17 @@ class IKETaskVolume:
                     return category
         return "その他"
 
+    def is_unscored(self, title: str, label: str = "") -> bool:
+        """登録キーワードにも休み系にも当たらず、デフォルト負荷のままになるか。
+        True＝「スコア設定に拾われていない予定」＝負荷に反映されていない（追加候補）。"""
+        text = f"{title} {label}".lower()
+        if self._is_off(text):
+            return False  # 休みは意図的に負荷0なので未登録扱いにしない
+        for keyword in self.config.get("scores", {}):
+            if keyword.lower() in text:
+                return False
+        return True
+
     def summarize(self, events: list[dict]) -> dict:
         if not events:
             return {"total": 0.0, "count": 0, "by_category": {}}

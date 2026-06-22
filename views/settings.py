@@ -13,7 +13,7 @@ from calendar_loader import list_calendars, is_authenticated
 APP_DIR = Path(__file__).resolve().parent.parent
 
 
-def render(scorer):
+def render(scorer, events=None):
     st.markdown("# 設定")
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs(
@@ -46,6 +46,30 @@ def render(scorer):
             scorer.save_config()
             st.cache_data.clear()
             st.success("保存しました。各画面の負荷スコアに反映されます。")
+        st.caption("💡 不要なキーワードは上の表で行を削除（行頭を選んで Delete）→💾保存で消せます。")
+
+        # ── カレンダー語句の診断：負荷に拾われていない予定を見つける ──
+        with st.expander("📅 カレンダー語句の診断（負荷に拾われていない予定を見つける）"):
+            default_s = scorer.config.get("default_score", 0.3)
+            st.caption(f"実際のGoogleカレンダーの予定で、上のスコアにも休み系にも当たらず"
+                       f"デフォルト負荷（{default_s}）のままの予定を、出現回数が多い順に表示します。"
+                       "重要なものは上の表にキーワードを追加すると負荷へ反映されます。")
+            if not events:
+                st.caption("（カレンダーの予定が読み込まれていません。同期後に開いてください）")
+            else:
+                from collections import Counter
+                cnt = Counter()
+                for e in events:
+                    title = (e.get("title") or "").strip()
+                    if title and scorer.is_unscored(title):
+                        cnt[title] += 1
+                if not cnt:
+                    st.success("未登録の予定はありません。主要な予定はすべて負荷に反映されています。")
+                else:
+                    st.markdown(f"**未登録の予定：{len(cnt)} 種**（負荷に未反映＝追加候補）")
+                    rows = [{"予定名": t, "出現回数": n} for t, n in cnt.most_common(40)]
+                    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                    st.caption("👆 数えたい予定があれば、上の表に「予定名に含まれる語」とスコアを追加→💾保存。")
 
     # ── プリセット管理 ──
     with tab2:
@@ -116,9 +140,12 @@ ANTHROPIC_API_KEY=sk-ant-xxxxx
 """)
         stats = db.get_completion_stats()
         st.markdown("### 学習データ")
-        st.caption(f"完了タスク記録: {stats['count']}件 · "
+        _exc = stats.get("excluded", 0)
+        _exc_note = f"（即時完了 {_exc}件は除外）" if _exc else ""
+        st.caption(f"完了タスク記録: {stats['count']}件{_exc_note} · "
                    f"平均完了時間 {stats['avg_hours']}h · 中央値 {stats['median_hours']}h")
-        st.caption("これらの記録はLLMの精度向上（負荷予測・所要時間予測）に使用される基盤データです。")
+        st.caption("作成から30分未満で完了したもの（プリセットで一括「実行済み」化したもの等）は、"
+                   "実作業ではないため平均・学習の集計から自動で除外しています。")
 
     # ── カレンダー ──
     with tab4:

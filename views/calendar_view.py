@@ -80,6 +80,7 @@ def render(events, scorer):
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     st.markdown("<div class='cal-section'>月間カレンダー（タスクはドラッグで締切変更・クリックで完了）</div>",
                 unsafe_allow_html=True)
+    st.caption("🟥 日付の背景が赤いほど、その日の負荷が高いことを表します。")
     _interactive_month(events, scorer)
 
     # 凡例
@@ -176,6 +177,21 @@ def _interactive_month(events, scorer):
             "backgroundColor": "#EDEBE6" if not done else "#D7D5CE",
             "borderColor": pcol, "textColor": "#9A988F" if done else "#141414",
             "editable": True,
+        })
+
+    # ── 日マスを「負荷が強いほど赤く」着色（FullCalendarの背景イベント）──
+    by_day = _events_by_day(events, scorer)
+    loads = [v["load"] for v in by_day.values() if v["load"] > 0]
+    max_load = max(loads) if loads else 1.0
+    for d, info in by_day.items():
+        load = info["load"]
+        if load <= 0:
+            continue
+        intensity = min(1.0, (load / max_load) ** 0.7)   # 低負荷も少し見えるよう緩く
+        alpha = round(0.08 + intensity * 0.44, 2)         # 薄(0.08)〜濃(0.52)
+        cal_events.append({
+            "start": d.isoformat(), "allDay": True, "display": "background",
+            "backgroundColor": f"rgba(224,36,94,{alpha})",
         })
 
     options = {

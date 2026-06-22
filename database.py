@@ -689,26 +689,36 @@ def activity_summary():
         return sorted(result, key=lambda x: -x["count"])
 
 
+# 作成からこの時間未満で完了したものは「もう終わっていたものを即・実行済みにした」
+# （プリセット一括投入の retroactive 完了等）とみなし、平均完了時間・学習の集計から除外する。
+MIN_TRACK_HOURS = 0.5  # 30分
+
+
 def get_completion_stats():
-    """完了所要時間の統計（学習用サマリー）"""
+    """完了所要時間の統計（学習用サマリー）。即時完了(<MIN_TRACK_HOURS)は実作業でないため除外。"""
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT payload FROM activity_log WHERE kind='todo_completed'").fetchall()
-        hours = []
+        hours, excluded = [], 0
         for r in rows:
             try:
                 h = json.loads(r["payload"]).get("hours_to_complete")
-                if h is not None:
-                    hours.append(h)
             except Exception:
-                pass
+                continue
+            if h is None:
+                continue
+            if h < MIN_TRACK_HOURS:   # 即時/retroactive 完了は集計に入れない
+                excluded += 1
+                continue
+            hours.append(h)
         if not hours:
-            return {"count": 0, "avg_hours": 0, "median_hours": 0}
+            return {"count": 0, "avg_hours": 0, "median_hours": 0, "excluded": excluded}
         hours.sort()
         return {
             "count": len(hours),
             "avg_hours": round(sum(hours) / len(hours), 1),
             "median_hours": round(hours[len(hours) // 2], 1),
+            "excluded": excluded,
         }
 
 

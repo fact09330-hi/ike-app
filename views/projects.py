@@ -427,8 +427,10 @@ def _task_row(t, depth, project_id, last=False):
             st.session_state[f"addsub_{t['id']}"] = not st.session_state.get(f"addsub_{t['id']}", False)
             st.rerun(scope="fragment")
     with cols[5]:
-        if st.button("🗑", key=f"tdel_{t['id']}", help="削除"):
-            db.delete_todo(t["id"]); st.rerun(scope="fragment")
+        if st.button("✏️", key=f"ted_{t['id']}", help="編集（名前・期日・プロジェクト等／削除もここ）"):
+            ek = f"inline_edit_{t['id']}"
+            st.session_state[ek] = not st.session_state.get(ek, False)
+            st.rerun(scope="fragment")
     # サブタスク追加インライン
     if st.session_state.get(f"addsub_{t['id']}"):
         sc = st.columns([5, 1])
@@ -439,3 +441,8 @@ def _task_row(t, depth, project_id, last=False):
                 db.add_todo(sub, project_id=project_id, parent_id=t["id"], priority=t["priority"])
                 st.session_state[f"addsub_{t['id']}"] = False
                 st.rerun(scope="fragment")
+    # インライン編集（✏️）— 既存の編集フォームを流用（保存／削除／未完了に戻す）
+    if st.session_state.get(f"inline_edit_{t['id']}"):
+        import components
+        with st.container(border=True):
+            components.todo_editor_body(t, db.get_projects(), db.get_lists(), key_prefix="ptask_")
