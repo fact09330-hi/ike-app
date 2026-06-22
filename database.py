@@ -50,19 +50,36 @@ class _DictCursor:
 
 
 class _TursoConn:
-    """libsql-client 接続を sqlite3.Connection 風に見せる（execute/executescript/commit/close）"""
-    def __init__(self, client, shared=False):
+    """libsql-client 接続を sqlite3.Connection 風に見せる（execute/executescript/commit/close）。
+    接続タイムアウト/切断時は接続を作り直して自動リトライする（本番のTurso一時不通対策）。"""
+    def __init__(self, client, url="", token="", shared=False):
         self._c = client
+        self._url = url
+        self._token = token
         self._shared = shared  # 使い回しの接続は close で閉じない
 
+    def _run(self, sql, params=()):
+        last = None
+        for attempt in range(3):
+            try:
+                return self._c.execute(sql, list(params) if params else [])
+            except Exception as e:
+                if not _is_conn_error(e):
+                    raise
+                # 接続確立前のタイムアウト/切断＝作り直せば直る。再送も安全。
+                last = e
+                import time as _t
+                _t.sleep(0.4 * (attempt + 1))
+                self._c = _reconnect_turso(self._url, self._token)
+        raise last
+
     def execute(self, sql, params=()):
-        rs = self._c.execute(sql, list(params) if params else [])
-        return _DictCursor(rs)
+        return _DictCursor(self._run(sql, params))
 
     def executescript(self, script):
         for stmt in _split_sql(script):
             if stmt.strip():
-                self._c.execute(stmt)
+                self._run(stmt)
 
     def commit(self):
         pass  # HTTP API は各 execute が即時反映（明示コミット不要）
@@ -79,17 +96,53 @@ class _TursoConn:
 # Turso接続はスレッドごとに1つだけ作って使い回す（毎回作るとHTTPクライアント生成で遅い）
 _turso_tls = threading.local()
 
+# 「作り直せば直る」接続/タイムアウト系エラーの手がかり（aiohttp等の文言）
+_CONN_ERR_HINTS = ("timeout", "connection", "closed", "disconnect", "reset",
+                   "clienterror", "serverdisconnected", "cannot connect", "refused",
+                   "broken pipe", "eof")
+
+
+def _is_conn_error(e):
+    """例外チェーンを辿り、接続/タイムアウト系（再接続で回復見込み）かを判定。"""
+    cur = e
+    for _ in range(6):
+        if cur is None:
+            break
+        s = (type(cur).__name__ + " " + str(cur)).lower()
+        if any(h in s for h in _CONN_ERR_HINTS):
+            return True
+        cur = getattr(cur, "__cause__", None) or getattr(cur, "__context__", None)
+    return False
+
+
+def _new_turso_client(url, token):
+    import libsql_client  # クラウド時のみ必要（純Python＝Streamlit Cloudで確実に入る）
+    http = url.replace("libsql://", "https://", 1) if url.startswith("libsql://") else url
+    return libsql_client.create_client_sync(http, auth_token=token)
+
+
+def _reconnect_turso(url, token):
+    """スレッドローカルの古いクライアントを捨てて新規接続を作る。"""
+    old = getattr(_turso_tls, "client", None)
+    if old is not None:
+        try:
+            old.close()
+        except Exception:
+            pass
+    cli = _new_turso_client(url, token)
+    _turso_tls.client = cli
+    _turso_tls.key = (url, token)
+    return cli
+
 
 def _connect_turso(url, token):
-    import libsql_client  # クラウド時のみ必要（純Python＝Streamlit Cloudで確実に入る）
     key = (url, token)
     cli = getattr(_turso_tls, "client", None)
     if cli is None or getattr(_turso_tls, "key", None) != key:
-        http = url.replace("libsql://", "https://", 1) if url.startswith("libsql://") else url
-        cli = libsql_client.create_client_sync(http, auth_token=token)
+        cli = _new_turso_client(url, token)
         _turso_tls.client = cli
         _turso_tls.key = key
-    return _TursoConn(cli, shared=True)
+    return _TursoConn(cli, url, token, shared=True)
 
 
 def using_turso():
